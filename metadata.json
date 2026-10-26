@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix CBT TKA Portal - Ujian Berbasis Komputer",
+  "description": "Aplikasi ujian berbasis CBT dengan dashboard portal login siswa dan tampilan antarmuka ujian menyerupai Tes Kemampuan Akademik (TKA / UTBK / ANBK).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

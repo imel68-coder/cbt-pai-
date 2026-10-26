@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Informasi data siswa peserta ujian CBT",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "noPeserta": { "type": "string" },
+        "nama": { "type": "string" },
+        "kelas": { "type": "string" },
+        "sesi": { "type": "string" },
+        "ruang": { "type": "string" },
+        "nisn": { "type": "string" },
+        "sekolah": { "type": "string" },
+        "fotoUrl": { "type": "string" },
+        "status": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "noPeserta", "nama", "kelas"]
+    },
+    "ExamResult": {
+      "title": "ExamResult",
+      "description": "Hasil pengerjaan dan skor ujian siswa yang dikirim dari HP ke guru",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "examTitle": { "type": "string" },
+        "noPeserta": { "type": "string" },
+        "nama": { "type": "string" },
+        "kelas": { "type": "string" },
+        "totalQuestions": { "type": "number" },
+        "correctCount": { "type": "number" },
+        "wrongCount": { "type": "number" },
+        "unansweredCount": { "type": "number" },
+        "rawScore": { "type": "number" },
+        "scaleScore": { "type": "number" },
+        "percentage": { "type": "number" },
+        "scale100": { "type": "number" },
+        "isPassed": { "type": "boolean" },
+        "durationSecondsUsed": { "type": "number" },
+        "submittedAt": { "type": "string" }
+      },
+      "required": ["id", "noPeserta", "nama", "kelas"]
+    },
+    "ExamToken": {
+      "title": "ExamToken",
+      "description": "Status token aktif untuk mengizinkan siswa memulai ujian",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string" },
+        "generatedAt": { "type": "number" },
+        "expiresInMinutes": { "type": "number" }
+      },
+      "required": ["token", "generatedAt"]
+    },
+    "ClassRombel": {
+      "title": "ClassRombel",
+      "description": "Status aktivasi sesi ujian rombel kelas",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "tingkat": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "token": { "type": "string" },
+        "examTitle": { "type": "string" },
+        "activatedAt": { "type": "number" }
+      },
+      "required": ["id", "name", "isActive"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "Butir soal ujian PAI CBT",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "number": { "type": "number" },
+        "subtest": { "type": "string" },
+        "type": { "type": "string" },
+        "question": { "type": "string" },
+        "correctAnswer": { "type": "string" },
+        "points": { "type": "number" }
+      },
+      "required": ["id", "number", "subtest", "type", "question", "correctAnswer", "points"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Daftar siswa peserta ujian dan status pengerjaan"
+    },
+    "/exam_results/{resultId}": {
+      "schema": "ExamResult",
+      "description": "Rekapitulasi hasil ujian siswa yang disinkronkan secara real-time"
+    },
+    "/exam_token/{tokenId}": {
+      "schema": "ExamToken",
+      "description": "Token ujian aktif untuk otorisasi login siswa"
+    },
+    "/classes/{classId}": {
+      "schema": "ClassRombel",
+      "description": "Status aktivasi 6 rombel kelas ujian CBT"
+    },
+    "/questions/{questionId}": {
+      "schema": "Question",
+      "description": "Bank soal ujian PAI & BP"
+    }
+  }
+}
