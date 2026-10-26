@@ -31,7 +31,9 @@ export const ShareExamModal: React.FC<ShareExamModalProps> = ({
   tokenState
 }) => {
   const [copied, setCopied] = useState(false);
-  const examUrl = 'https://ais-pre-rf57mkjuiegk2qn4qy6d4n-320814651568.asia-southeast1.run.app';
+  const examUrl = typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+    ? window.location.origin
+    : 'https://shiny-ganache-a899e7.netlify.app';
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(examUrl)}&margin=10`;
 
   if (!isOpen) return null;

@@ -40,6 +40,12 @@ interface DashboardViewProps {
   classes: ClassRombel[];
   questions?: Question[];
   totalExamResults?: number;
+  cloudStatus?: {
+    isConnected: boolean;
+    isSyncing: boolean;
+    lastSyncTime: number | null;
+    error: string | null;
+  };
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -54,7 +60,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   prefilledStudent,
   classes,
   questions,
-  totalExamResults
+  totalExamResults,
+  cloudStatus
 }) => {
   const [noPeserta, setNoPeserta] = useState(prefilledStudent?.noPeserta || students[0]?.noPeserta || '24-01-09-0012');
   const [password, setPassword] = useState('123456');
@@ -198,6 +205,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {/* Form Login Peserta */}
           <div className="p-6 sm:p-8">
+            {/* Live Cloud Sync Indicator for Students */}
+            <div className="mb-4 p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cloudStatus?.isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                <span className="text-slate-600 font-medium">
+                  Server Guru: <strong className={cloudStatus?.isConnected ? 'text-emerald-700' : 'text-amber-700'}>
+                    {cloudStatus?.isConnected ? 'Terhubung Real-time' : 'Menghubungkan...'}
+                  </strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-slate-500 font-mono">Token:</span>
+                <span className="font-mono font-black text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  {tokenState.token}
+                </span>
+              </div>
+            </div>
+
             {errorMsg && (
               <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />

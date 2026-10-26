@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
 import { 
-  getFirestore, 
+  initializeFirestore, 
   collection, 
   doc, 
   setDoc, 
@@ -19,18 +19,15 @@ import {
 import firebaseConfig from '../../firebase-applet-config.json';
 import { ExamResult, Student, ExamTokenState, ClassRombel, Question } from '../types/cbt';
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+export const db = initializeFirestore(
+  app,
+  {
+    experimentalAutoDetectLongPolling: true,
+  },
+  firebaseConfig.firestoreDatabaseId
+);
 export const auth = getAuth(app);
-
-// Attempt anonymous auth so requests have an active Firebase session
-try {
-  signInAnonymously(auth).catch(() => {
-    // Unauthenticated access is allowed by firestore.rules if anonymous auth is not configured
-  });
-} catch (e) {
-  // Ignore
-}
 
 export enum OperationType {
   CREATE = 'create',
@@ -68,6 +65,74 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   };
   console.warn('Firestore Warning/Error: ', JSON.stringify(errInfo));
+}
+
+// Connection status tracking
+type ConnectionCallback = (status: {
+  isConnected: boolean;
+  isSyncing: boolean;
+  lastSyncTime: number | null;
+  error: string | null;
+}) => void;
+
+const connectionListeners: Set<ConnectionCallback> = new Set();
+let currentConnectionState = {
+  isConnected: true,
+  isSyncing: false,
+  lastSyncTime: Date.now(),
+  error: null as string | null
+};
+
+function notifyConnectionListeners() {
+  connectionListeners.forEach((cb) => {
+    try {
+      cb({ ...currentConnectionState });
+    } catch (e) {
+      console.warn('Error in connection listener:', e);
+    }
+  });
+}
+
+function updateConnectionSuccess() {
+  currentConnectionState = {
+    isConnected: true,
+    isSyncing: false,
+    lastSyncTime: Date.now(),
+    error: null
+  };
+  notifyConnectionListeners();
+}
+
+function updateConnectionError(err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  currentConnectionState = {
+    isConnected: false,
+    isSyncing: false,
+    lastSyncTime: currentConnectionState.lastSyncTime,
+    error: msg
+  };
+  notifyConnectionListeners();
+}
+
+export function subscribeToConnectionStatus(callback: ConnectionCallback): () => void {
+  connectionListeners.add(callback);
+  callback({ ...currentConnectionState });
+  return () => {
+    connectionListeners.delete(callback);
+  };
+}
+
+export async function testCloudConnection(): Promise<boolean> {
+  try {
+    currentConnectionState.isSyncing = true;
+    notifyConnectionListeners();
+    const testDoc = await getDoc(doc(db, TOKEN_COLL, TOKEN_DOC));
+    updateConnectionSuccess();
+    return testDoc.exists();
+  } catch (e) {
+    updateConnectionError(e);
+    return false;
+  }
 }
 
 // ============================================================================
@@ -115,7 +180,9 @@ export async function saveExamResultToCloud(result: ExamResult): Promise<void> {
       submittedAt: new Date(result.endTime || Date.now()).toISOString()
     };
     await setDoc(doc(db, EXAM_RESULTS_COLL, docId), payload);
+    updateConnectionSuccess();
   } catch (error) {
+    updateConnectionError(error);
     handleFirestoreError(error, OperationType.WRITE, path);
     throw error;
   }
@@ -128,6 +195,7 @@ export function subscribeToExamResults(
   return onSnapshot(
     collection(db, path),
     (snapshot) => {
+      updateConnectionSuccess();
       const results: ExamResult[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
@@ -168,6 +236,7 @@ export function subscribeToExamResults(
       callback(results);
     },
     (error) => {
+      updateConnectionError(error);
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
@@ -179,8 +248,11 @@ export async function deleteExamResultFromCloud(result: ExamResult): Promise<voi
   const path = `${EXAM_RESULTS_COLL}/${docId}`;
   try {
     await deleteDoc(doc(db, EXAM_RESULTS_COLL, docId));
+    updateConnectionSuccess();
   } catch (error) {
+    updateConnectionError(error);
     handleFirestoreError(error, OperationType.DELETE, path);
+    throw error;
   }
 }
 
@@ -193,8 +265,11 @@ export async function clearAllExamResultsFromCloud(): Promise<void> {
       batch.delete(d.ref);
     });
     await batch.commit();
+    updateConnectionSuccess();
   } catch (error) {
+    updateConnectionError(error);
     handleFirestoreError(error, OperationType.DELETE, path);
+    throw error;
   }
 }
 
@@ -212,8 +287,11 @@ export async function saveTokenToCloud(tokenState: ExamTokenState): Promise<void
       generatedAt: tokenState.generatedAt || Date.now(),
       expiresInMinutes: tokenState.expiresInMinutes || 120
     });
+    updateConnectionSuccess();
   } catch (error) {
+    updateConnectionError(error);
     handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
   }
 }
 
@@ -224,6 +302,7 @@ export function subscribeToToken(
   return onSnapshot(
     doc(db, TOKEN_COLL, TOKEN_DOC),
     (docSnap) => {
+      updateConnectionSuccess();
       if (docSnap.exists()) {
         const d = docSnap.data();
         if (d && d.token) {
@@ -236,6 +315,7 @@ export function subscribeToToken(
       }
     },
     (error) => {
+      updateConnectionError(error);
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
@@ -254,8 +334,11 @@ export async function saveClassesToCloud(classes: ClassRombel[]): Promise<void> 
       list: classes,
       updatedAt: Date.now()
     });
+    updateConnectionSuccess();
   } catch (error) {
+    updateConnectionError(error);
     handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
   }
 }
 
@@ -266,14 +349,16 @@ export function subscribeToClasses(
   return onSnapshot(
     doc(db, CLASSES_COLL, CLASSES_DOC),
     (docSnap) => {
+      updateConnectionSuccess();
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data && Array.isArray(data.list) && data.list.length > 0) {
+        if (data && Array.isArray(data.list)) {
           callback(data.list);
         }
       }
     },
     (error) => {
+      updateConnectionError(error);
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
@@ -292,8 +377,11 @@ export async function saveStudentsToCloud(students: Student[]): Promise<void> {
       list: students,
       updatedAt: Date.now()
     });
+    updateConnectionSuccess();
   } catch (error) {
+    updateConnectionError(error);
     handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
   }
 }
 
@@ -304,14 +392,16 @@ export function subscribeToStudents(
   return onSnapshot(
     doc(db, STUDENTS_COLL, STUDENTS_DOC),
     (docSnap) => {
+      updateConnectionSuccess();
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data && Array.isArray(data.list) && data.list.length > 0) {
+        if (data && Array.isArray(data.list)) {
           callback(data.list);
         }
       }
     },
     (error) => {
+      updateConnectionError(error);
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
@@ -330,8 +420,11 @@ export async function saveQuestionsToCloud(questions: Question[]): Promise<void>
       list: questions,
       updatedAt: Date.now()
     });
+    updateConnectionSuccess();
   } catch (error) {
+    updateConnectionError(error);
     handleFirestoreError(error, OperationType.WRITE, path);
+    throw error;
   }
 }
 
@@ -342,21 +435,57 @@ export function subscribeToQuestions(
   return onSnapshot(
     doc(db, QUESTIONS_COLL, QUESTIONS_DOC),
     (docSnap) => {
+      updateConnectionSuccess();
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data && Array.isArray(data.list) && data.list.length > 0) {
+        if (data && Array.isArray(data.list)) {
           callback(data.list);
         }
       }
     },
     (error) => {
+      updateConnectionError(error);
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
 }
 
 // ============================================================================
-// 6. SEED CLOUD DEFAULTS IF BLANK (Inisialisasi Database Pertama Kali)
+// 6. SYNC ALL CURRENT TEACHER LAPTOP DATA TO CLOUD (Force Push Guru -> Siswa)
+// ============================================================================
+export async function pushAllDataToCloud(
+  classes: ClassRombel[],
+  students: Student[],
+  questions: Question[],
+  tokenState: ExamTokenState
+): Promise<{ success: boolean; message: string }> {
+  try {
+    currentConnectionState.isSyncing = true;
+    notifyConnectionListeners();
+
+    await Promise.all([
+      saveClassesToCloud(classes),
+      saveStudentsToCloud(students),
+      saveQuestionsToCloud(questions),
+      saveTokenToCloud(tokenState)
+    ]);
+
+    updateConnectionSuccess();
+    return {
+      success: true,
+      message: 'Seluruh data rombel, siswa, bank soal, dan token berhasil disinkronkan ke Cloud Firebase!'
+    };
+  } catch (err) {
+    updateConnectionError(err);
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : 'Gagal menyinkronkan data ke cloud.'
+    };
+  }
+}
+
+// ============================================================================
+// 7. SEED CLOUD DEFAULTS IF BLANK (Inisialisasi Database Pertama Kali)
 // ============================================================================
 export async function seedCloudDefaultsIfEmpty(
   defaultClasses: ClassRombel[],
@@ -384,8 +513,11 @@ export async function seedCloudDefaultsIfEmpty(
     if (!tokenDoc.exists()) {
       await saveTokenToCloud(defaultToken);
     }
+    updateConnectionSuccess();
   } catch (err) {
     console.warn('Seed cloud error:', err);
+    updateConnectionError(err);
   }
 }
+
 

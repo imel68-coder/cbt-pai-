@@ -13,6 +13,12 @@ interface NavbarProps {
   onOpenGrades?: () => void;
   onOpenShare?: () => void;
   currentView: 'dashboard' | 'exam' | 'result';
+  cloudStatus?: {
+    isConnected: boolean;
+    isSyncing: boolean;
+    lastSyncTime: number | null;
+    error: string | null;
+  };
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -20,7 +26,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSupervisor,
   onOpenGrades,
   onOpenShare,
-  currentView
+  currentView,
+  cloudStatus
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
@@ -90,10 +97,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="text-[10px] text-slate-400">{currentDate}</span>
             </div>
 
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-medium text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Server Online (Sinkron)</span>
-            </div>
+            {cloudStatus?.isConnected ? (
+              <div 
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/70 border border-emerald-500/40 text-[11px] font-semibold text-emerald-300"
+                title={cloudStatus.lastSyncTime ? `Cloud Real-time Aktif • Sinkron terakhir: ${new Date(cloudStatus.lastSyncTime).toLocaleTimeString('id-ID')}` : 'Cloud Real-time Aktif'}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Cloud Real-time (Aktif)</span>
+              </div>
+            ) : (
+              <div 
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-950/70 border border-amber-500/40 text-[11px] font-semibold text-amber-300"
+                title={cloudStatus?.error || 'Menyambungkan ke Firebase Firestore...'}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <span>Menghubungkan Cloud...</span>
+              </div>
+            )}
 
             {/* Bagikan Ujian (QR & Link) Trigger */}
             {onOpenShare && (

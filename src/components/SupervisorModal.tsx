@@ -77,6 +77,13 @@ interface SupervisorModalProps {
   onClearAllResults?: () => void;
   onLoadSampleResults?: () => void;
   onViewExamResultDetail?: (result: ExamResult) => void;
+  cloudStatus?: {
+    isConnected: boolean;
+    isSyncing: boolean;
+    lastSyncTime: number | null;
+    error: string | null;
+  };
+  onPushAllToCloud?: () => Promise<{ success: boolean; message: string }>;
 }
 
 interface ConfirmDialogConfig {
@@ -723,10 +730,30 @@ export const SupervisorModal: React.FC<SupervisorModalProps> = ({
   onDeleteExamResult,
   onClearAllResults,
   onLoadSampleResults,
-  onViewExamResultDetail
+  onViewExamResultDetail,
+  cloudStatus,
+  onPushAllToCloud
 }) => {
   type TabType = 'aktivasiKelas' | 'siswa' | 'tambahSoal' | 'bankSoal' | 'token' | 'rekapNilai';
   const [activeTab, setActiveTabState] = useState<TabType>(initialTab || 'aktivasiKelas');
+  const [isPushingCloud, setIsPushingCloud] = useState(false);
+
+  const handleForcePushToCloud = async () => {
+    if (!onPushAllToCloud) return;
+    setIsPushingCloud(true);
+    try {
+      const res = await onPushAllToCloud();
+      if (res.success) {
+        showToast(res.message, 'success');
+      } else {
+        showToast(res.message, 'error');
+      }
+    } catch (e) {
+      showToast('Gagal menyinkronkan data ke cloud', 'error');
+    } finally {
+      setIsPushingCloud(false);
+    }
+  };
 
   const setActiveTab = (tab: TabType) => {
     setActiveTabState(tab);
@@ -1356,6 +1383,32 @@ export const SupervisorModal: React.FC<SupervisorModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Real-time Cloud Synchronization Bar */}
+        <div className="bg-gradient-to-r from-blue-950 via-indigo-950 to-slate-900 text-white px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 border-b border-indigo-800/60 text-xs shrink-0">
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${cloudStatus?.isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            <span className="font-bold">
+              Cloud Firebase: {cloudStatus?.isConnected ? 'Terhubung (Real-time Aktif)' : 'Menghubungkan...'}
+            </span>
+            <span className="text-[11px] text-indigo-200 hidden lg:inline">
+              • Setiap perubahan token, rombel, bank soal, dan siswa otomatis tersinkron ke seluruh HP siswa tanpa perlu refresh.
+            </span>
+          </div>
+
+          {onPushAllToCloud && (
+            <button
+              type="button"
+              onClick={handleForcePushToCloud}
+              disabled={isPushingCloud}
+              className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs shadow transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              title="Kirim seluruh data lokal laptop (rombel, siswa, bank soal, token) ke Cloud agar HP siswa langsung sinkron"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isPushingCloud ? 'animate-spin' : ''}`} />
+              <span>{isPushingCloud ? 'Menyinkronkan...' : 'Sinkronkan Laptop ke HP Siswa'}</span>
+            </button>
+          )}
         </div>
 
         {/* Tab Navigasi Utama */}

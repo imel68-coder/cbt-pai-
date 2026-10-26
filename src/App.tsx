@@ -23,7 +23,9 @@ import {
   subscribeToStudents,
   saveQuestionsToCloud,
   subscribeToQuestions,
-  seedCloudDefaultsIfEmpty
+  seedCloudDefaultsIfEmpty,
+  subscribeToConnectionStatus,
+  pushAllDataToCloud
 } from './services/firebase';
 import { 
   Student, 
@@ -161,20 +163,41 @@ export default function App() {
     'aktivasiKelas' | 'siswa' | 'tambahSoal' | 'bankSoal' | 'token' | 'rekapNilai'
   >('aktivasiKelas');
 
+  // Real-time Cloud Connection State
+  const [cloudStatus, setCloudStatus] = useState<{
+    isConnected: boolean;
+    isSyncing: boolean;
+    lastSyncTime: number | null;
+    error: string | null;
+  }>({
+    isConnected: true,
+    isSyncing: false,
+    lastSyncTime: Date.now(),
+    error: null
+  });
+
+  useEffect(() => {
+    const unsubscribe = subscribeToConnectionStatus((status) => {
+      setCloudStatus(status);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Handler to force-push all local teacher state to cloud
+  const handlePushAllToCloud = async () => {
+    return await pushAllDataToCloud(classes, students, questions, tokenState);
+  };
+
   // 1. Initial Cloud Seeding (Jika database di cloud masih baru/kosong)
   useEffect(() => {
-    seedCloudDefaultsIfEmpty(DEFAULT_6_ROMBEL, MOCK_STUDENTS, MOCK_QUESTIONS, {
-      token: DEFAULT_EXAM_TOKEN,
-      generatedAt: Date.now(),
-      expiresInMinutes: 120
-    });
+    seedCloudDefaultsIfEmpty(classes, students, questions, tokenState);
   }, []);
 
   // 2. Real-time listener: Sync student exam results from Firebase Cloud
   useEffect(() => {
     try {
       const unsubscribe = subscribeToExamResults((cloudResults) => {
-        if (cloudResults && cloudResults.length > 0) {
+        if (Array.isArray(cloudResults)) {
           setExamResults(cloudResults);
         }
       });
@@ -202,7 +225,7 @@ export default function App() {
   useEffect(() => {
     try {
       const unsubscribe = subscribeToClasses((cloudClasses) => {
-        if (cloudClasses && cloudClasses.length > 0) {
+        if (Array.isArray(cloudClasses) && cloudClasses.length > 0) {
           setClasses(cloudClasses);
         }
       });
@@ -216,7 +239,7 @@ export default function App() {
   useEffect(() => {
     try {
       const unsubscribe = subscribeToStudents((cloudStudents) => {
-        if (cloudStudents && cloudStudents.length > 0) {
+        if (Array.isArray(cloudStudents) && cloudStudents.length > 0) {
           setStudents(cloudStudents);
         }
       });
@@ -230,7 +253,7 @@ export default function App() {
   useEffect(() => {
     try {
       const unsubscribe = subscribeToQuestions((cloudQuestions) => {
-        if (cloudQuestions && cloudQuestions.length > 0) {
+        if (Array.isArray(cloudQuestions) && cloudQuestions.length > 0) {
           setQuestions(cloudQuestions);
         }
       });
@@ -536,6 +559,7 @@ export default function App() {
         }}
         onOpenShare={() => setIsShareOpen(true)}
         currentView={currentView}
+        cloudStatus={cloudStatus}
       />
 
       {/* View 1: Beranda / Dashboard Siswa & Portal Login */}
@@ -559,6 +583,7 @@ export default function App() {
           classes={classes}
           questions={questions}
           totalExamResults={examResults.length}
+          cloudStatus={cloudStatus}
         />
       )}
 
@@ -620,6 +645,8 @@ export default function App() {
         onDeleteExamResult={handleDeleteExamResult}
         onClearAllResults={handleClearAllResults}
         onLoadSampleResults={handleLoadSampleResults}
+        cloudStatus={cloudStatus}
+        onPushAllToCloud={handlePushAllToCloud}
         onViewExamResultDetail={(res) => {
           setLastResult(res);
           setIsSupervisorOpen(false);
